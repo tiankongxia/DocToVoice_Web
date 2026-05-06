@@ -13,13 +13,15 @@ Netlify 只负责网页和代理请求；音频生成由后端完成，因为它
 
 1. 打开 Render，选择 New > Web Service。
 2. 连接这个 GitHub 仓库。
-3. Root Directory 填：
+3. 如果 Railway 能看到 Root Directory，填：
 
 ```text
 backend
 ```
 
-4. Environment 选择 Docker。
+如果看不到也没关系，仓库根目录已经有 `Dockerfile` 和 `railway.json`，直接部署即可。
+
+4. Environment 选择 Docker，或保持 Railway 自动识别。
 5. 部署完成后，记下后端地址，例如：
 
 ```text

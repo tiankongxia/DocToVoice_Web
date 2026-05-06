@@ -67,8 +67,9 @@ textarea {
 }
 
 .topbar {
+  position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   padding: 18px;
@@ -110,10 +111,7 @@ p {
 }
 
 .settings-corner {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  z-index: 10;
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -122,11 +120,10 @@ p {
   border-radius: 999px;
   padding: 7px 13px;
   color: var(--accent-strong);
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  background: transparent;
   font-size: 14px;
   font-weight: 800;
   text-decoration: none;
-  backdrop-filter: blur(12px);
 }
 
 .source-panel {

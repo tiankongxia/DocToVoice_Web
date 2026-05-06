@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.DS_Store
+backend/tmp/
+backend/outputs/
+*.mp3
+temp_audio_*.mp3

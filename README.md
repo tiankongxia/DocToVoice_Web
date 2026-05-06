@@ -63,13 +63,13 @@ frontend
 
 6. Deploy。
 
-如果不想用 Netlify 代理，也可以编辑：
+前端也可以直接调用后端。编辑：
 
 ```text
 frontend/config.js
 ```
 
-把空字符串改成后端地址：
+当前已经配置为 Railway 后端地址：
 
 ```js
 window.API_BASE_URL = "https://doctovoiceweb-production.up.railway.app";

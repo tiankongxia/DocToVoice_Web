@@ -35,7 +35,7 @@ function setButtonProgress(value) {
 
 function renderFiles(files) {
   results.innerHTML = "";
-  for (const file of files || []) {
+  for (const file of (files || []).filter((item) => item.type === "audio")) {
     const item = document.createElement("div");
     item.className = "result-item";
 

@@ -1,6 +1,6 @@
 # DocToVoice Web
 
-把 Dropbox 文档链接转成中文朗读 MP3，并可生成字幕 `.docx`。
+把 Dropbox 文档链接转成中文朗读 MP3。
 
 ## 架构
 

@@ -7,7 +7,7 @@
 - `frontend/`: 静态网页，部署到 Netlify。
 - `backend/`: Python 服务，部署到 Render/Railway/Fly.io 等支持 Docker 的平台。
 
-Netlify 只负责网页和代理请求；音频生成由后端完成，因为它需要 `edge-tts`、`ffmpeg`、`python-docx` 和 `pydub`。
+Netlify 只负责网页和代理请求；音频生成由后端完成，因为它需要 `edge-tts`、`ffmpeg` 和 `python-docx`。
 
 ## 交互
 

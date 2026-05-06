@@ -21,8 +21,6 @@ from urllib.parse import unquote, urlparse
 from urllib.request import Request, urlopen
 
 from docx import Document
-from pydub import AudioSegment
-from pydub.utils import which
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -37,10 +35,8 @@ os.environ["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/opt/homebrew/Caskroom/mi
 os.environ["FFMPEG_BINARY"] = "/opt/homebrew/bin/ffmpeg"
 os.environ["FFPROBE_BINARY"] = "/opt/homebrew/bin/ffprobe"
 
-AudioSegment.converter = which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
-AudioSegment.ffprobe = which("ffprobe") or "/opt/homebrew/bin/ffprobe"
-
-EDGE_TTS = which("edge-tts") or "/opt/homebrew/Caskroom/miniforge/base/bin/edge-tts"
+FFMPEG = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
+EDGE_TTS = shutil.which("edge-tts") or "/opt/homebrew/Caskroom/miniforge/base/bin/edge-tts"
 
 DEFAULT_VOICE = "zh-CN-YunjianNeural"
 DEFAULT_RATE = "-5%"
@@ -213,6 +209,63 @@ def as_int(value, default: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(maximum, parsed))
 
 
+def ffconcat_line(path: Path) -> str:
+    escaped = str(path.resolve()).replace("'", "'\\''")
+    return f"file '{escaped}'\n"
+
+
+def make_silence_file(path: Path, pause_ms: int):
+    if pause_ms <= 0 or path.exists():
+        return
+    duration = max(0.001, pause_ms / 1000)
+    cmd = [
+        FFMPEG,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=r=24000:cl=mono",
+        "-t",
+        f"{duration:.3f}",
+        "-q:a",
+        "9",
+        "-acodec",
+        "libmp3lame",
+        str(path),
+    ]
+    subprocess.run(cmd, check=True)
+
+
+def concat_audio_files(parts: list[Path], target: Path):
+    if not parts:
+        raise RuntimeError("没有成功生成任何音频")
+    concat_path = target.parent / f"{target.stem}_concat.txt"
+    concat_path.write_text("".join(ffconcat_line(part) for part in parts), encoding="utf-8")
+    try:
+        cmd = [
+            FFMPEG,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_path),
+            "-acodec",
+            "libmp3lame",
+            "-b:a",
+            "192k",
+            str(target),
+        ]
+        subprocess.run(cmd, check=True)
+    finally:
+        concat_path.unlink(missing_ok=True)
+
+
 def synthesize_block(
     block: list[str],
     target: Path,
@@ -224,8 +277,12 @@ def synthesize_block(
     done_ref: list[int],
     block_label: str,
 ):
-    combined = AudioSegment.empty()
     temp_files: list[Path] = []
+    concat_parts: list[Path] = []
+    silence_file = target.parent / f"{target.stem}_silence.mp3"
+    if pause_ms > 0:
+        make_silence_file(silence_file, pause_ms)
+        temp_files.append(silence_file)
 
     for index, para in enumerate(block):
         job.check_cancelled()
@@ -264,14 +321,13 @@ def synthesize_block(
             job.emit(message=f"{block_label}：第 {index + 1} 段失败，已跳过")
             continue
 
-        segment = AudioSegment.from_file(str(temp_mp3), format="mp3")
-        combined += segment + AudioSegment.silent(duration=pause_ms)
         temp_files.append(temp_mp3)
+        concat_parts.append(temp_mp3)
+        if pause_ms > 0:
+            concat_parts.append(silence_file)
 
-    if len(combined) == 0:
-        raise RuntimeError("没有成功生成任何音频")
-
-    combined.export(str(target), format="mp3", bitrate="192k")
+    job.check_cancelled()
+    concat_audio_files(concat_parts, target)
 
     for item in temp_files:
         item.unlink(missing_ok=True)

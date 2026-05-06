@@ -1,8 +1,7 @@
-const tabs = document.querySelectorAll(".tab");
-const modeInput = document.querySelector("#mode");
-const panels = document.querySelectorAll(".mode-field");
 const form = document.querySelector("#jobForm");
 const primary = document.querySelector(".primary");
+const pasteButton = document.querySelector("#pasteButton");
+const urlInput = document.querySelector("#url");
 const serverState = document.querySelector("#serverState");
 const jobTitle = document.querySelector("#jobTitle");
 const jobMessage = document.querySelector("#jobMessage");
@@ -20,12 +19,6 @@ const defaults = {
 function getSettings() {
   const saved = JSON.parse(localStorage.getItem("docToVoiceSettings") || "{}");
   return { ...defaults, ...saved };
-}
-
-function setMode(mode) {
-  modeInput.value = mode;
-  tabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.mode === mode));
-  panels.forEach((panel) => panel.classList.toggle("hidden", panel.dataset.panel !== mode));
 }
 
 function applySettingsToForm() {
@@ -69,8 +62,15 @@ function renderFiles(files) {
   }
 }
 
-tabs.forEach((tab) => {
-  tab.addEventListener("click", () => setMode(tab.dataset.mode));
+pasteButton.addEventListener("click", async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    urlInput.value = text.trim();
+    urlInput.focus();
+  } catch {
+    urlInput.focus();
+    jobMessage.textContent = "浏览器没有允许读取剪贴板，请手动粘贴。";
+  }
 });
 
 form.addEventListener("submit", async (event) => {

@@ -132,31 +132,16 @@ p {
   padding: 18px;
 }
 
-.tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.tab {
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--text);
-  border-radius: 999px;
-  padding: 8px 14px;
-  cursor: pointer;
-}
-
-.tab.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
-}
-
 .field {
   display: grid;
   gap: 7px;
   margin-bottom: 14px;
+}
+
+.input-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
 }
 
 label {
@@ -198,6 +183,16 @@ textarea:focus {
   cursor: pointer;
   font-weight: 800;
   padding: 14px 18px;
+}
+
+.secondary {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 0 16px;
 }
 
 .primary:disabled {
@@ -284,12 +279,8 @@ textarea:focus {
     justify-content: space-between;
   }
 
-  .tabs {
-    overflow-x: auto;
-  }
-
-  .tab {
-    flex: 0 0 auto;
+  .input-row {
+    grid-template-columns: 1fr;
   }
 
   .progress-head {

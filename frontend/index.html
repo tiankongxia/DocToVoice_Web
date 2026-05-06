@@ -21,33 +21,20 @@
         </header>
 
         <section class="source-panel">
-          <div class="tabs" role="tablist">
-            <button class="tab active" data-mode="file" type="button">Word 文件</button>
-            <button class="tab" data-mode="url" type="button">Dropbox 链接</button>
-            <button class="tab" data-mode="text" type="button">直接输入</button>
-          </div>
-
           <form id="jobForm">
-            <input type="hidden" name="mode" id="mode" value="file" />
+            <input type="hidden" name="mode" id="mode" value="url" />
             <input type="hidden" name="title" id="title" />
             <input type="hidden" name="voice" id="voice" />
             <input type="hidden" name="rate" id="rate" />
             <input type="hidden" name="pause_ms" id="pause_ms" />
             <input type="hidden" name="max_chars" id="max_chars" />
 
-            <div class="field mode-field" data-panel="file">
-              <label for="file">选择 Word 文档</label>
-              <input id="file" name="file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
-            </div>
-
-            <div class="field mode-field hidden" data-panel="url">
-              <label for="url">粘贴 Dropbox 链接</label>
-              <input id="url" name="url" type="url" placeholder="https://www.dropbox.com/..." />
-            </div>
-
-            <div class="field mode-field hidden" data-panel="text">
-              <label for="text">输入文字</label>
-              <textarea id="text" name="text" rows="9" placeholder="在这里输入要朗读的文字"></textarea>
+            <div class="field">
+              <label for="url">Dropbox 文档链接</label>
+              <div class="input-row">
+                <input id="url" name="url" type="url" placeholder="https://www.dropbox.com/..." autocomplete="off" />
+                <button class="secondary" id="pasteButton" type="button">粘贴</button>
+              </div>
             </div>
 
             <button class="primary" type="submit">开始生成</button>

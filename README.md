@@ -69,16 +69,22 @@ frontend
 
 6. Deploy。
 
-前端也可以直接调用后端。编辑：
+前端直接调用当前启用的后端。编辑：
 
 ```text
 frontend/config.js
 ```
 
-当前已经配置为 Railway 后端地址：
+当前保留 Railway 和 Render 两个后端，切换只需要改 `ACTIVE_BACKEND`：
 
 ```js
-window.API_BASE_URL = "https://doctovoiceweb-production.up.railway.app";
+window.BACKENDS = {
+  railway: "https://doctovoiceweb-production.up.railway.app",
+  render: "https://doctovoice-web.onrender.com",
+};
+
+window.ACTIVE_BACKEND = "render";
+window.API_BASE_URL = window.BACKENDS[window.ACTIVE_BACKEND];
 ```
 
 ## 本地运行

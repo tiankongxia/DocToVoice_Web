@@ -3,7 +3,8 @@
 
 from __future__ import annotations
 
-import cgi
+from email.parser import BytesParser
+from email.policy import default as email_policy
 import json
 import os
 import queue
@@ -56,6 +57,15 @@ VOICES = [
 ]
 
 jobs: dict[str, "Job"] = {}
+
+
+class MultipartForm:
+    def __init__(self, fields: dict[str, str], files: dict[str, tuple[str, bytes]]):
+        self.fields = fields
+        self.files = files
+
+    def getfirst(self, name: str, default: str = "") -> str:
+        return self.fields.get(name, default)
 
 
 class Job:
@@ -208,6 +218,35 @@ def as_int(value, default: int, minimum: int, maximum: int) -> int:
     except (TypeError, ValueError):
         return default
     return max(minimum, min(maximum, parsed))
+
+
+def parse_multipart_form(handler: BaseHTTPRequestHandler) -> MultipartForm:
+    content_type = handler.headers.get("Content-Type", "")
+    content_length = int(handler.headers.get("Content-Length", "0"))
+    body = handler.rfile.read(content_length)
+    if "multipart/form-data" not in content_type:
+        return MultipartForm({}, {})
+
+    raw_message = (
+        f"Content-Type: {content_type}\r\n"
+        "MIME-Version: 1.0\r\n\r\n"
+    ).encode("utf-8") + body
+    message = BytesParser(policy=email_policy).parsebytes(raw_message)
+
+    fields: dict[str, str] = {}
+    files: dict[str, tuple[str, bytes]] = {}
+    for part in message.iter_parts():
+        name = part.get_param("name", header="content-disposition")
+        if not name:
+            continue
+        filename = part.get_filename()
+        payload = part.get_payload(decode=True) or b""
+        if filename:
+            files[name] = (filename, payload)
+        else:
+            charset = part.get_content_charset() or "utf-8"
+            fields[name] = payload.decode(charset, errors="replace")
+    return MultipartForm(fields, files)
 
 
 def cleanup_old_outputs(keep: int = MAX_OUTPUT_JOBS):
@@ -550,7 +589,7 @@ class LangduHandler(BaseHTTPRequestHandler):
         )
 
     def create_job(self):
-        form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ={"REQUEST_METHOD": "POST"})
+        form = parse_multipart_form(self)
 
         mode = form.getfirst("mode", "text")
         title = safe_name(form.getfirst("title", "") or "朗读")
@@ -570,12 +609,12 @@ class LangduHandler(BaseHTTPRequestHandler):
 
         try:
             if mode == "file":
-                item = form["file"]
-                if not getattr(item, "filename", None):
+                file_item = form.files.get("file")
+                if not file_item:
                     raise ValueError("请选择 .docx 文件")
+                _filename, file_data = file_item
                 upload_path = TMP_DIR / f"{uuid.uuid4().hex}.docx"
-                with upload_path.open("wb") as handle:
-                    shutil.copyfileobj(item.file, handle)
+                upload_path.write_bytes(file_data)
                 payload["file_path"] = upload_path
             elif mode == "url":
                 url = form.getfirst("url", "").strip()

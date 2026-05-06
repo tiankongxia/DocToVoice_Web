@@ -249,11 +249,6 @@ textarea:focus {
     padding: 12px;
   }
 
-  .topbar {
-    align-items: start;
-    flex-direction: column;
-  }
-
   .input-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }

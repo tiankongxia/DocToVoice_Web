@@ -43,6 +43,7 @@ DEFAULT_RATE = "-5%"
 DEFAULT_MAX_CHARS = 5000
 DEFAULT_PAUSE_MS = 1000
 TEMP_AUDIO_PREFIX = "temp_audio_"
+MAX_OUTPUT_JOBS = 5
 PUNCTUATION_TO_NEWLINE = "。，？！；、——!?：:…【】"
 REMOVE_CHARS = "\"'""'' "
 
@@ -207,6 +208,13 @@ def as_int(value, default: int, minimum: int, maximum: int) -> int:
     except (TypeError, ValueError):
         return default
     return max(minimum, min(maximum, parsed))
+
+
+def cleanup_old_outputs(keep: int = MAX_OUTPUT_JOBS):
+    output_dirs = [item for item in OUTPUT_DIR.iterdir() if item.is_dir()]
+    output_dirs.sort(key=lambda item: item.stat().st_mtime, reverse=True)
+    for old_dir in output_dirs[keep:]:
+        shutil.rmtree(old_dir, ignore_errors=True)
 
 
 def ffconcat_line(path: Path) -> str:
@@ -586,6 +594,7 @@ class LangduHandler(BaseHTTPRequestHandler):
 
         job = Job(title=title)
         jobs[job.id] = job
+        cleanup_old_outputs()
         thread = threading.Thread(target=run_job, args=(job, payload), daemon=True)
         thread.start()
         self.json_response({"id": job.id})

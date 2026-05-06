@@ -9,6 +9,12 @@
 
 Netlify 只负责网页和代理请求；音频生成由后端完成，因为它需要 `edge-tts`、`ffmpeg`、`python-docx` 和 `pydub`。
 
+## 交互
+
+- 首页只保留内容来源、开始生成和结果。
+- 声音、语速、段落停顿、分块模式放在 `frontend/settings.html`。
+- 分块默认是不分块；开启自动分块后按约 5000 字一块输出。
+
 ## 1. 部署后端到 Render
 
 1. 打开 Render，选择 New > Web Service。

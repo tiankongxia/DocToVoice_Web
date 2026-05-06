@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>朗读设置</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell narrow">
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <h1>设置</h1>
+            <p>调整朗读方式。</p>
+          </div>
+          <a class="ghost-link" href="/">返回</a>
+        </header>
+
+        <section class="source-panel">
+          <form id="settingsForm">
+            <div class="field">
+              <label for="voice">声音</label>
+              <select id="voice" name="voice">
+                <option value="zh-CN-YunjianNeural">云健</option>
+                <option value="zh-CN-XiaoxiaoNeural">晓晓</option>
+                <option value="zh-CN-YunxiNeural">云希</option>
+                <option value="zh-CN-YunyangNeural">云扬</option>
+                <option value="zh-CN-XiaoyiNeural">晓伊</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="rate">语速</label>
+              <select id="rate" name="rate">
+                <option value="-15%">慢</option>
+                <option value="-5%">正常偏慢</option>
+                <option value="+0%">正常</option>
+                <option value="+10%">稍快</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="pause_ms">段落停顿</label>
+              <select id="pause_ms" name="pause_ms">
+                <option value="500">短</option>
+                <option value="1000">正常</option>
+                <option value="1500">长</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="split_mode">分块</label>
+              <select id="split_mode" name="split_mode">
+                <option value="none">不分块</option>
+                <option value="auto">自动分块</option>
+              </select>
+            </div>
+
+            <button class="primary" type="submit">保存设置</button>
+          </form>
+        </section>
+      </section>
+    </main>
+    <script src="/settings.js"></script>
+  </body>
+</html>

@@ -10,11 +10,30 @@ const progressText = document.querySelector("#progressText");
 const progressBar = document.querySelector("#progressBar");
 const results = document.querySelector("#results");
 const API_BASE = window.API_BASE_URL || "";
+const defaults = {
+  voice: "zh-CN-YunjianNeural",
+  rate: "-5%",
+  pause_ms: "1000",
+  split_mode: "none",
+};
+
+function getSettings() {
+  const saved = JSON.parse(localStorage.getItem("docToVoiceSettings") || "{}");
+  return { ...defaults, ...saved };
+}
 
 function setMode(mode) {
   modeInput.value = mode;
   tabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.mode === mode));
   panels.forEach((panel) => panel.classList.toggle("hidden", panel.dataset.panel !== mode));
+}
+
+function applySettingsToForm() {
+  const settings = getSettings();
+  form.elements.voice.value = settings.voice;
+  form.elements.rate.value = settings.rate;
+  form.elements.pause_ms.value = settings.pause_ms;
+  form.elements.max_chars.value = settings.split_mode === "auto" ? "5000" : "1000000";
 }
 
 function setProgress(value) {
@@ -56,6 +75,7 @@ tabs.forEach((tab) => {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  applySettingsToForm();
   results.innerHTML = "";
   setProgress(0);
   serverState.textContent = "提交中";

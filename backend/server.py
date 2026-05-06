@@ -471,7 +471,7 @@ class LangduHandler(BaseHTTPRequestHandler):
         title = safe_name(form.getfirst("title", "") or "朗读")
         voice = form.getfirst("voice", DEFAULT_VOICE)
         rate = form.getfirst("rate", DEFAULT_RATE)
-        max_chars = as_int(form.getfirst("max_chars"), DEFAULT_MAX_CHARS, 500, 20000)
+        max_chars = as_int(form.getfirst("max_chars"), DEFAULT_MAX_CHARS, 500, 1000000)
         pause_ms = as_int(form.getfirst("pause_ms"), DEFAULT_PAUSE_MS, 0, 5000)
 
         payload = {

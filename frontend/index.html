@@ -12,9 +12,12 @@
         <header class="topbar">
           <div>
             <h1>朗读</h1>
-            <p>把 Word 文档或文字转成可播放、可下载的语音。</p>
+            <p>选择内容，生成语音。</p>
           </div>
-          <div class="status-pill" id="serverState">就绪</div>
+          <div class="top-actions">
+            <a class="ghost-link" href="/settings.html">设置</a>
+            <div class="status-pill" id="serverState">就绪</div>
+          </div>
         </header>
 
         <section class="source-panel">
@@ -26,49 +29,25 @@
 
           <form id="jobForm">
             <input type="hidden" name="mode" id="mode" value="file" />
+            <input type="hidden" name="title" id="title" />
+            <input type="hidden" name="voice" id="voice" />
+            <input type="hidden" name="rate" id="rate" />
+            <input type="hidden" name="pause_ms" id="pause_ms" />
+            <input type="hidden" name="max_chars" id="max_chars" />
 
             <div class="field mode-field" data-panel="file">
-              <label for="file">DOCX 文件</label>
+              <label for="file">选择 Word 文档</label>
               <input id="file" name="file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
             </div>
 
             <div class="field mode-field hidden" data-panel="url">
-              <label for="url">Dropbox 文档链接</label>
+              <label for="url">粘贴 Dropbox 链接</label>
               <input id="url" name="url" type="url" placeholder="https://www.dropbox.com/..." />
             </div>
 
             <div class="field mode-field hidden" data-panel="text">
-              <label for="text">文字内容</label>
+              <label for="text">输入文字</label>
               <textarea id="text" name="text" rows="9" placeholder="在这里输入要朗读的文字"></textarea>
-            </div>
-
-            <div class="grid">
-              <div class="field">
-                <label for="title">标题</label>
-                <input id="title" name="title" type="text" placeholder="可留空" />
-              </div>
-              <div class="field">
-                <label for="voice">声音</label>
-                <select id="voice" name="voice">
-                  <option>zh-CN-YunjianNeural</option>
-                  <option>zh-CN-XiaoxiaoNeural</option>
-                  <option>zh-CN-YunxiNeural</option>
-                  <option>zh-CN-YunyangNeural</option>
-                  <option>zh-CN-XiaoyiNeural</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="rate">语速</label>
-                <input id="rate" name="rate" type="text" value="-5%" />
-              </div>
-              <div class="field">
-                <label for="pause_ms">段落停顿</label>
-                <input id="pause_ms" name="pause_ms" type="number" min="0" max="5000" value="1000" />
-              </div>
-              <div class="field">
-                <label for="max_chars">每块字数</label>
-                <input id="max_chars" name="max_chars" type="number" min="500" max="20000" value="5000" />
-              </div>
             </div>
 
             <button class="primary" type="submit">开始生成</button>

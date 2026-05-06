@@ -45,9 +45,13 @@ textarea {
 }
 
 .shell {
-  width: min(1060px, 100%);
+  width: min(820px, 100%);
   margin: 0 auto;
   padding: 20px;
+}
+
+.shell.narrow {
+  width: min(560px, 100%);
 }
 
 .workspace {
@@ -69,6 +73,12 @@ textarea {
   justify-content: space-between;
   gap: 16px;
   padding: 18px;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 h1,
@@ -100,6 +110,21 @@ p {
   background: var(--panel);
   font-size: 14px;
   font-weight: 700;
+}
+
+.ghost-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 13px;
+  color: var(--accent-strong);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
 }
 
 .source-panel,
@@ -154,7 +179,7 @@ textarea {
 
 textarea {
   resize: vertical;
-  min-height: 180px;
+  min-height: 220px;
   line-height: 1.55;
 }
 
@@ -162,12 +187,6 @@ input:focus,
 select:focus,
 textarea:focus {
   border-color: var(--accent);
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
 }
 
 .primary {
@@ -260,17 +279,17 @@ textarea:focus {
     flex-direction: column;
   }
 
+  .top-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .tabs {
     overflow-x: auto;
   }
 
   .tab {
     flex: 0 0 auto;
-  }
-
-  .grid {
-    grid-template-columns: 1fr;
-    gap: 0;
   }
 
   .progress-head {

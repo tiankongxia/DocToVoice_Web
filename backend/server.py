@@ -71,7 +71,16 @@ class Job:
         self.message = "已加入队列"
         self.files: list[dict[str, str]] = []
         self.error: str | None = None
+        self.cancelled = False
         self.events: queue.Queue[dict] = queue.Queue()
+
+    def cancel(self):
+        self.cancelled = True
+        self.emit(status="cancelled", message="已取消", progress=self.progress)
+
+    def check_cancelled(self):
+        if self.cancelled:
+            raise RuntimeError("已取消")
 
     def emit(self, **payload):
         if "status" in payload:
@@ -219,11 +228,13 @@ def synthesize_block(
     temp_files: list[Path] = []
 
     for index, para in enumerate(block):
+        job.check_cancelled()
         temp_mp3 = target.parent / f"{TEMP_AUDIO_PREFIX}{target.stem}_{index}.mp3"
         tts_text = process_for_tts(para)
         ok = False
 
         for attempt in range(3):
+            job.check_cancelled()
             job.emit(
                 status="running",
                 message=f"{block_label}：正在合成第 {index + 1}/{len(block)} 段",
@@ -243,6 +254,7 @@ def synthesize_block(
                 ok = True
                 break
             time.sleep(1 + attempt)
+            job.check_cancelled()
 
         done_ref[0] += 1
         progress = int(done_ref[0] / max(1, total_paras) * 95)
@@ -272,6 +284,7 @@ def run_job(job: Job, payload: dict):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     try:
+        job.check_cancelled()
         mode = payload["mode"]
         voice = payload["voice"] if payload["voice"] in VOICES else DEFAULT_VOICE
         rate = payload["rate"] or DEFAULT_RATE
@@ -279,6 +292,7 @@ def run_job(job: Job, payload: dict):
         pause_ms = payload["pause_ms"]
 
         job.emit(status="running", progress=2, message="正在读取内容")
+        job.check_cancelled()
 
         if mode in {"file", "url"}:
             docx_path = work_dir / "input.docx"
@@ -287,6 +301,7 @@ def run_job(job: Job, payload: dict):
                 Path(payload["file_path"]).unlink(missing_ok=True)
             else:
                 download_docx(payload["url"], docx_path)
+            job.check_cancelled()
             docx_path = replace_titles_in_docx(docx_path)
             paragraphs = read_docx(docx_path)
             if not paragraphs:
@@ -308,6 +323,7 @@ def run_job(job: Job, payload: dict):
         job.emit(progress=5, message=f"共 {len(blocks)} 个音频文件，{total_paras} 段")
 
         for block_index, block in enumerate(blocks):
+            job.check_cancelled()
             if mode == "text":
                 filename = f"{title}.mp3"
             else:
@@ -324,7 +340,10 @@ def run_job(job: Job, payload: dict):
 
         job.emit(status="done", progress=100, message="完成", files=files)
     except Exception as exc:
-        job.emit(status="error", error=str(exc), message="出错")
+        if job.cancelled:
+            job.emit(status="cancelled", message="已取消")
+        else:
+            job.emit(status="error", error=str(exc), message="出错")
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
 
@@ -368,6 +387,8 @@ class LangduHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/api/jobs":
             self.create_job()
+        elif self.path.startswith("/api/jobs/") and self.path.endswith("/cancel"):
+            self.cancel_job(self.path)
         else:
             self.send_error(HTTPStatus.NOT_FOUND)
 
@@ -443,7 +464,7 @@ class LangduHandler(BaseHTTPRequestHandler):
                 self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError):
                 break
-            if event.get("status") in {"done", "error"}:
+            if event.get("status") in {"done", "error", "cancelled"}:
                 break
 
     def serve_job(self, path: str):
@@ -512,6 +533,15 @@ class LangduHandler(BaseHTTPRequestHandler):
         thread = threading.Thread(target=run_job, args=(job, payload), daemon=True)
         thread.start()
         self.json_response({"id": job.id})
+
+    def cancel_job(self, path: str):
+        job_id = path.split("/")[3]
+        job = jobs.get(job_id)
+        if not job:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        job.cancel()
+        self.json_response({"ok": True})
 
     def json_response(self, payload: dict, status=HTTPStatus.OK):
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")

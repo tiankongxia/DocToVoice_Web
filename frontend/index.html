@@ -16,7 +16,6 @@
           </div>
           <div class="top-actions">
             <a class="ghost-link" href="/settings.html">设置</a>
-            <div class="status-pill" id="serverState">就绪</div>
           </div>
         </header>
 
@@ -37,21 +36,13 @@
               </div>
             </div>
 
-            <button class="primary" type="submit">开始生成</button>
+            <button class="primary" id="submitButton" type="submit" disabled>开始生成</button>
+            <button class="secondary cancel-button hidden" id="cancelButton" type="button">取消</button>
           </form>
         </section>
 
-        <section class="progress-panel">
-          <div class="progress-head">
-            <div>
-              <h2 id="jobTitle">等待任务</h2>
-              <p id="jobMessage">选择内容后开始生成。</p>
-            </div>
-            <strong id="progressText">0%</strong>
-          </div>
-          <div class="bar"><span id="progressBar"></span></div>
-          <div class="results" id="results"></div>
-        </section>
+        <p class="message" id="jobMessage"></p>
+        <section class="results" id="results"></section>
       </section>
     </main>
     <script src="/config.js"></script>

@@ -1,14 +1,13 @@
 const form = document.querySelector("#jobForm");
-const primary = document.querySelector(".primary");
+const primary = document.querySelector("#submitButton");
+const cancelButton = document.querySelector("#cancelButton");
 const pasteButton = document.querySelector("#pasteButton");
 const urlInput = document.querySelector("#url");
-const serverState = document.querySelector("#serverState");
-const jobTitle = document.querySelector("#jobTitle");
 const jobMessage = document.querySelector("#jobMessage");
-const progressText = document.querySelector("#progressText");
-const progressBar = document.querySelector("#progressBar");
 const results = document.querySelector("#results");
 const API_BASE = window.API_BASE_URL || "";
+let activeJobId = null;
+let activeSource = null;
 const defaults = {
   voice: "zh-CN-YunjianNeural",
   rate: "-5%",
@@ -29,10 +28,9 @@ function applySettingsToForm() {
   form.elements.max_chars.value = settings.split_mode === "auto" ? "5000" : "1000000";
 }
 
-function setProgress(value) {
+function setButtonProgress(value) {
   const safe = Math.max(0, Math.min(100, Number(value) || 0));
-  progressText.textContent = `${Math.round(safe)}%`;
-  progressBar.style.width = `${safe}%`;
+  primary.textContent = `生成中 ${Math.round(safe)}%`;
 }
 
 function renderFiles(files) {
@@ -66,6 +64,7 @@ pasteButton.addEventListener("click", async () => {
   try {
     const text = await navigator.clipboard.readText();
     urlInput.value = text.trim();
+    updateSubmitState();
     urlInput.focus();
   } catch {
     urlInput.focus();
@@ -73,15 +72,44 @@ pasteButton.addEventListener("click", async () => {
   }
 });
 
+function updateSubmitState() {
+  primary.disabled = !urlInput.value.trim() || !!activeJobId;
+}
+
+function resetRunState(label = "开始生成") {
+  activeJobId = null;
+  if (activeSource) {
+    activeSource.close();
+    activeSource = null;
+  }
+  primary.textContent = label;
+  cancelButton.classList.add("hidden");
+  updateSubmitState();
+}
+
+urlInput.addEventListener("input", updateSubmitState);
+
+cancelButton.addEventListener("click", async () => {
+  if (!activeJobId) return;
+  const jobId = activeJobId;
+  jobMessage.textContent = "正在取消…";
+  resetRunState();
+  try {
+    await fetch(`${API_BASE}/api/jobs/${jobId}/cancel`, { method: "POST" });
+  } catch {
+    jobMessage.textContent = "已停止等待，后台任务可能稍后结束。";
+  }
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!urlInput.value.trim() || activeJobId) return;
   applySettingsToForm();
   results.innerHTML = "";
-  setProgress(0);
-  serverState.textContent = "提交中";
-  jobTitle.textContent = "正在创建任务";
-  jobMessage.textContent = "稍等一下。";
+  setButtonProgress(0);
+  jobMessage.textContent = "";
   primary.disabled = true;
+  cancelButton.classList.remove("hidden");
 
   try {
     const response = await fetch(`${API_BASE}/api/jobs`, {
@@ -93,33 +121,35 @@ form.addEventListener("submit", async (event) => {
       throw new Error(payload.error || "任务创建失败");
     }
 
-    serverState.textContent = "生成中";
+    activeJobId = payload.id;
     const source = new EventSource(`${API_BASE}/api/jobs/${payload.id}/events`);
+    activeSource = source;
     source.onmessage = (message) => {
       const data = JSON.parse(message.data);
-      jobTitle.textContent = data.title || "朗读";
       jobMessage.textContent = data.error || data.message || "";
       jobMessage.classList.toggle("error", data.status === "error");
-      setProgress(data.progress);
+      setButtonProgress(data.progress);
       if (data.files?.length) {
         renderFiles(data.files);
       }
-      if (data.status === "done" || data.status === "error") {
-        serverState.textContent = data.status === "done" ? "完成" : "出错";
-        primary.disabled = false;
-        source.close();
+      if (data.status === "done") {
+        resetRunState("再生成一次");
+      } else if (data.status === "error") {
+        resetRunState("重新生成");
+      } else if (data.status === "cancelled") {
+        jobMessage.textContent = "已取消";
+        resetRunState();
       }
     };
     source.onerror = () => {
       jobMessage.textContent = "连接中断，可以刷新后重新查看。";
-      serverState.textContent = "连接中断";
-      primary.disabled = false;
-      source.close();
+      resetRunState("重新生成");
     };
   } catch (error) {
     jobMessage.textContent = error.message;
     jobMessage.classList.add("error");
-    serverState.textContent = "出错";
-    primary.disabled = false;
+    resetRunState("重新生成");
   }
 });
+
+updateSubmitState();

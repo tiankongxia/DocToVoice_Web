@@ -30,7 +30,7 @@ function applySettingsToForm() {
 
 function setButtonProgress(value) {
   const safe = Math.max(0, Math.min(100, Number(value) || 0));
-  primary.textContent = `生成中 ${Math.round(safe)}%`;
+  primary.innerHTML = `<span class="spinner" aria-hidden="true"></span><span>生成中 ${Math.round(safe)}%</span>`;
 }
 
 function renderFiles(files) {

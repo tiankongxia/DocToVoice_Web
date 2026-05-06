@@ -293,6 +293,7 @@ def concat_audio_files(parts: list[Path], target: Path):
     try:
         cmd = [
             FFMPEG,
+            "-y",
             "-hide_banner",
             "-loglevel",
             "error",
@@ -308,7 +309,19 @@ def concat_audio_files(parts: list[Path], target: Path):
             "192k",
             str(target),
         ]
-        subprocess.run(cmd, check=True)
+        timeout_seconds = min(900, max(120, len(parts) * 8))
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "ffmpeg 合并失败").strip()
+            raise RuntimeError(detail[-600:])
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"音频合并超时，已等待 {exc.timeout:.0f} 秒") from exc
     finally:
         concat_path.unlink(missing_ok=True)
 
@@ -373,11 +386,14 @@ def synthesize_block(
         if pause_ms > 0:
             concat_parts.append(silence_file)
 
-    job.check_cancelled()
-    concat_audio_files(concat_parts, target)
-
-    for item in temp_files:
-        item.unlink(missing_ok=True)
+    try:
+        job.check_cancelled()
+        merge_progress = min(98, max(96, int(done_ref[0] / max(1, total_paras) * 98)))
+        job.emit(progress=merge_progress, message=f"{block_label}：正在合并音频")
+        concat_audio_files(concat_parts, target)
+    finally:
+        for item in temp_files:
+            item.unlink(missing_ok=True)
 
 
 def run_job(job: Job, payload: dict):

@@ -25,7 +25,7 @@ backend
 5. 部署完成后，记下后端地址，例如：
 
 ```text
-https://doctovoice-backend.onrender.com
+https://doctovoiceweb-production.up.railway.app
 ```
 
 ## 2. 配置 Netlify 前端
@@ -39,7 +39,7 @@ frontend/netlify.toml
 把里面两个：
 
 ```text
-https://YOUR-BACKEND-URL.onrender.com
+https://doctovoiceweb-production.up.railway.app
 ```
 
 替换成你的 Render 后端地址。
@@ -72,7 +72,7 @@ frontend/config.js
 把空字符串改成后端地址：
 
 ```js
-window.API_BASE_URL = "https://doctovoice-backend.onrender.com";
+window.API_BASE_URL = "https://doctovoiceweb-production.up.railway.app";
 ```
 
 ## 本地运行

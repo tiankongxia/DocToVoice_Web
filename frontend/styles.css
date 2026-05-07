@@ -195,9 +195,72 @@ p {
 }
 
 .input-row {
+  display: block;
+}
+
+.url-input-wrap {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.url-input-wrap:focus-within {
+  border-color: var(--accent);
+}
+
+.url-input-wrap input {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 11px 8px 11px 12px;
+}
+
+.url-input-wrap input:focus {
+  border-color: transparent;
+}
+
+.input-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-right: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 90ms ease;
+}
+
+.input-clear::before {
+  content: "";
+  display: block;
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  mask: url("/assets/icons/x-circle-fill.svg") center / contain no-repeat;
+  -webkit-mask: url("/assets/icons/x-circle-fill.svg") center / contain no-repeat;
+}
+
+.input-clear:hover {
+  color: var(--text);
+}
+
+.input-clear:active {
+  transform: scale(0.92);
+}
+
+.input-clear:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: -2px;
 }
 
 label {
@@ -612,6 +675,6 @@ textarea:focus {
   }
 
   .input-row {
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: block;
   }
 }

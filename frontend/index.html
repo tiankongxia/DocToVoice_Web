@@ -29,8 +29,10 @@
             <div class="field">
               <label for="url">Dropbox 文档链接</label>
               <div class="input-row">
-                <input id="url" name="url" type="url" placeholder="https://www.dropbox.com/..." autocomplete="off" />
-                <button class="secondary" id="pasteButton" type="button">粘贴</button>
+                <div class="url-input-wrap">
+                  <input id="url" name="url" type="url" placeholder="https://www.dropbox.com/..." autocomplete="off" />
+                  <button class="input-clear hidden" id="clearUrlButton" type="button" aria-label="清空链接" title="清空"></button>
+                </div>
               </div>
             </div>
 

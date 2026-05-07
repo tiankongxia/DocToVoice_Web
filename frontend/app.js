@@ -1,8 +1,8 @@
 const form = document.querySelector("#jobForm");
 const primary = document.querySelector("#submitButton");
 const cancelButton = document.querySelector("#cancelButton");
-const pasteButton = document.querySelector("#pasteButton");
 const urlInput = document.querySelector("#url");
+const clearUrlButton = document.querySelector("#clearUrlButton");
 const jobMessage = document.querySelector("#jobMessage");
 const results = document.querySelector("#results");
 const infoModal = document.querySelector("#infoModal");
@@ -293,6 +293,11 @@ async function downloadOrShareAudio(file) {
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     jobMessage.textContent = "";
   } catch (error) {
+    if (error?.name === "AbortError" || /abort/i.test(error?.message || "")) {
+      jobMessage.textContent = "";
+      jobMessage.classList.remove("error");
+      return;
+    }
     jobMessage.textContent = error.message || "下载失败";
     jobMessage.classList.add("error");
   }
@@ -342,20 +347,10 @@ async function confirmDeleteAudio() {
   }
 }
 
-pasteButton.addEventListener("click", async () => {
-  try {
-    const text = await navigator.clipboard.readText();
-    urlInput.value = text.trim();
-    updateSubmitState();
-    urlInput.focus();
-  } catch {
-    urlInput.focus();
-    jobMessage.textContent = "浏览器没有允许读取剪贴板，请手动粘贴。";
-  }
-});
-
 function updateSubmitState() {
-  primary.disabled = !urlInput.value.trim() || !!activeJobId;
+  const hasUrl = !!urlInput.value.trim();
+  primary.disabled = !hasUrl || !!activeJobId;
+  clearUrlButton.classList.toggle("hidden", !hasUrl);
 }
 
 function resetRunState(label = "开始生成") {
@@ -370,6 +365,12 @@ function resetRunState(label = "开始生成") {
 }
 
 urlInput.addEventListener("input", updateSubmitState);
+
+clearUrlButton.addEventListener("click", () => {
+  urlInput.value = "";
+  updateSubmitState();
+  urlInput.focus();
+});
 
 cancelButton.addEventListener("click", async () => {
   if (!activeJobId) return;
@@ -413,7 +414,6 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!urlInput.value.trim() || activeJobId) return;
   applySettingsToForm();
-  results.innerHTML = "";
   setButtonProgress(0);
   jobMessage.textContent = "";
   primary.disabled = true;
@@ -442,7 +442,7 @@ form.addEventListener("submit", async (event) => {
       }
       if (data.status === "done") {
         loadAudioList();
-        resetRunState("再生成一次");
+        resetRunState();
       } else if (data.status === "error") {
         resetRunState("重新生成");
       } else if (data.status === "cancelled") {

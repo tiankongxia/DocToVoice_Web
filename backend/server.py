@@ -37,6 +37,7 @@ os.environ["FFMPEG_BINARY"] = "/opt/homebrew/bin/ffmpeg"
 os.environ["FFPROBE_BINARY"] = "/opt/homebrew/bin/ffprobe"
 
 FFMPEG = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
+FFPROBE = shutil.which("ffprobe") or "/opt/homebrew/bin/ffprobe"
 EDGE_TTS = shutil.which("edge-tts") or "/opt/homebrew/Caskroom/miniforge/base/bin/edge-tts"
 
 DEFAULT_VOICE = "zh-CN-YunjianNeural"
@@ -260,6 +261,31 @@ def cleanup_old_outputs(keep: int = MAX_OUTPUT_JOBS):
         shutil.rmtree(old_dir, ignore_errors=True)
 
 
+def audio_duration_seconds(path: Path) -> float | None:
+    try:
+        result = subprocess.run(
+            [
+                FFPROBE,
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if result.returncode != 0:
+            return None
+        return float(result.stdout.strip())
+    except (ValueError, subprocess.TimeoutExpired):
+        return None
+
+
 def list_audio_outputs() -> list[dict]:
     audio_files: list[dict] = []
     for job_dir in OUTPUT_DIR.iterdir():
@@ -275,6 +301,7 @@ def list_audio_outputs() -> list[dict]:
                     "deleteUrl": f"/api/audio/{quote(job_dir.name)}/{quote(mp3.name)}",
                     "type": "audio",
                     "size": stat.st_size,
+                    "duration": audio_duration_seconds(mp3),
                     "modifiedAt": stat.st_mtime,
                 }
             )

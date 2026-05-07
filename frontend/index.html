@@ -14,7 +14,7 @@
             <h1>朗读</h1>
             <p>选择内容，生成语音。</p>
           </div>
-          <a class="settings-corner" href="/settings.html">设置</a>
+          <a class="settings-corner" href="/settings.html" aria-label="设置" title="设置"></a>
         </header>
 
         <section class="source-panel">
@@ -43,6 +43,31 @@
         <section class="results" id="results"></section>
       </section>
     </main>
+    <div class="modal hidden" id="infoModal" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h2 id="infoTitle">音频信息</h2>
+          <button class="icon-button modal-close" id="infoClose" type="button" aria-label="关闭" title="关闭">×</button>
+        </div>
+        <dl class="info-grid" id="infoGrid"></dl>
+      </div>
+    </div>
+    <div class="modal hidden" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="deleteTitle">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h2 id="deleteTitle">删除音频</h2>
+          <button class="icon-button modal-close" id="deleteClose" type="button" aria-label="关闭" title="关闭">×</button>
+        </div>
+        <div class="modal-body">
+          <p>确定删除这个音频吗？</p>
+          <p class="delete-file-name" id="deleteFileName"></p>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary modal-action" id="deleteCancel" type="button">取消</button>
+          <button class="danger-action modal-action" id="deleteConfirm" type="button">删除</button>
+        </div>
+      </div>
+    </div>
     <script src="/config.js"></script>
     <script src="/app.js"></script>
   </body>

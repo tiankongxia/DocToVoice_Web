@@ -238,7 +238,7 @@ textarea:focus {
 
 .result-item {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 12px;
   align-items: center;
   padding: 12px;
@@ -256,6 +256,15 @@ textarea:focus {
   color: var(--accent-strong);
   font-weight: 800;
   text-decoration: none;
+}
+
+.delete-button {
+  border: 0;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 0;
 }
 
 .error {

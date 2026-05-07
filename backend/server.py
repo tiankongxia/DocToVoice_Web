@@ -18,7 +18,7 @@ from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import quote, unquote, urlparse
 from urllib.request import Request, urlopen
 
 from docx import Document
@@ -124,13 +124,17 @@ def read_docx(file_path: Path) -> list[str]:
     return [p.text.strip() for p in doc.paragraphs if p.text.strip()]
 
 
+def clean_title_line(text: str) -> str:
+    text = re.sub(r"\[\[(.*?)\|(.*?)\]\]", r"\1", text)
+    return " ".join(text.replace("\u00a0", " ").split()).strip()
+
+
 def suggested_title(paragraphs: list[str]) -> str:
-    for para in paragraphs:
-        text = re.sub(r"\[\[(.*?)\|(.*?)\]\]", r"\1", para)
-        text = " ".join(text.replace("\u00a0", " ").split()).strip()
-        if text:
-            return text[:32]
-    return "朗读"
+    lines = [clean_title_line(para) for para in paragraphs]
+    lines = [line for line in lines if line]
+    if not lines:
+        return "朗读"
+    return "_".join(lines[:2])
 
 
 def replace_titles_in_docx(filename: Path) -> Path:
@@ -254,6 +258,46 @@ def cleanup_old_outputs(keep: int = MAX_OUTPUT_JOBS):
     output_dirs.sort(key=lambda item: item.stat().st_mtime, reverse=True)
     for old_dir in output_dirs[keep:]:
         shutil.rmtree(old_dir, ignore_errors=True)
+
+
+def list_audio_outputs() -> list[dict]:
+    audio_files: list[dict] = []
+    for job_dir in OUTPUT_DIR.iterdir():
+        if not job_dir.is_dir():
+            continue
+        for mp3 in job_dir.glob("*.mp3"):
+            stat = mp3.stat()
+            audio_files.append(
+                {
+                    "jobId": job_dir.name,
+                    "name": mp3.name,
+                    "url": f"/outputs/{quote(job_dir.name)}/{quote(mp3.name)}",
+                    "deleteUrl": f"/api/audio/{quote(job_dir.name)}/{quote(mp3.name)}",
+                    "type": "audio",
+                    "size": stat.st_size,
+                    "modifiedAt": stat.st_mtime,
+                }
+            )
+    audio_files.sort(key=lambda item: item["modifiedAt"], reverse=True)
+    return audio_files
+
+
+def delete_audio_output(job_id: str, filename: str) -> bool:
+    target = (OUTPUT_DIR / job_id / filename).resolve()
+    output_root = OUTPUT_DIR.resolve()
+    try:
+        target.relative_to(output_root)
+    except ValueError:
+        return False
+    if target.suffix.lower() != ".mp3":
+        return False
+    if not target.exists():
+        return False
+    target.unlink()
+    job_dir = target.parent
+    if job_dir.exists() and not any(job_dir.glob("*.mp3")):
+        shutil.rmtree(job_dir, ignore_errors=True)
+    return True
 
 
 def ffconcat_line(path: Path) -> str:
@@ -401,6 +445,7 @@ def run_job(job: Job, payload: dict):
     out_dir = OUTPUT_DIR / job.id
     work_dir.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
+    cleanup_old_outputs()
 
     try:
         job.check_cancelled()
@@ -445,8 +490,10 @@ def run_job(job: Job, payload: dict):
             job.check_cancelled()
             if mode == "text":
                 filename = f"{title}.mp3"
+            elif len(blocks) == 1:
+                filename = f"{title}.mp3"
             else:
-                filename = f"output_{block_index + 1}.mp3"
+                filename = f"{title}-{block_index + 1}.mp3"
             mp3_path = out_dir / filename
             label = f"音频 {block_index + 1}/{len(blocks)}"
             synthesize_block(block, mp3_path, job, voice, rate, pause_ms, total_paras, done_ref, label)
@@ -484,6 +531,8 @@ class LangduHandler(BaseHTTPRequestHandler):
             self.serve_static(path)
         elif path.startswith("/outputs/"):
             self.serve_output(path)
+        elif path == "/api/audio":
+            self.json_response({"files": list_audio_outputs()})
         elif path.startswith("/api/jobs/") and path.endswith("/events"):
             self.serve_events(path)
         elif path.startswith("/api/jobs/"):
@@ -511,6 +560,14 @@ class LangduHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(HTTPStatus.NOT_FOUND)
 
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        path = unquote(parsed.path)
+        if path.startswith("/api/audio/"):
+            self.delete_audio(path)
+        else:
+            self.send_error(HTTPStatus.NOT_FOUND)
+
     def do_OPTIONS(self):
         self.send_response(HTTPStatus.NO_CONTENT)
         self.end_headers()
@@ -521,7 +578,7 @@ class LangduHandler(BaseHTTPRequestHandler):
 
     def send_cors_headers(self):
         self.send_header("Access-Control-Allow-Origin", os.environ.get("CORS_ALLOW_ORIGIN", "*"))
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
     def serve_static(self, path: str, head_only: bool = False):
@@ -608,7 +665,8 @@ class LangduHandler(BaseHTTPRequestHandler):
         form = parse_multipart_form(self)
 
         mode = form.getfirst("mode", "text")
-        title = safe_name(form.getfirst("title", "") or "朗读")
+        raw_title = form.getfirst("title", "").strip()
+        title = safe_name(raw_title, fallback="") if raw_title else ""
         voice = form.getfirst("voice", DEFAULT_VOICE)
         rate = form.getfirst("rate", DEFAULT_RATE)
         max_chars = as_int(form.getfirst("max_chars"), DEFAULT_MAX_CHARS, 500, 1000000)
@@ -649,10 +707,20 @@ class LangduHandler(BaseHTTPRequestHandler):
 
         job = Job(title=title)
         jobs[job.id] = job
-        cleanup_old_outputs()
         thread = threading.Thread(target=run_job, args=(job, payload), daemon=True)
         thread.start()
         self.json_response({"id": job.id})
+
+    def delete_audio(self, path: str):
+        parts = path.split("/", 4)
+        if len(parts) != 5:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        _empty, _api, _audio, job_id, filename = parts
+        if not delete_audio_output(job_id, filename):
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        self.json_response({"ok": True, "files": list_audio_outputs()})
 
     def cancel_job(self, path: str):
         job_id = path.split("/")[3]

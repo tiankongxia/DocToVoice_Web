@@ -49,6 +49,15 @@ function renderFiles(files) {
     link.textContent = "下载";
     item.append(link);
 
+    if (file.deleteUrl) {
+      const deleteButton = document.createElement("button");
+      deleteButton.className = "delete-button";
+      deleteButton.type = "button";
+      deleteButton.textContent = "删除";
+      deleteButton.addEventListener("click", () => deleteAudio(file));
+      item.append(deleteButton);
+    }
+
     if (file.type === "audio") {
       const audio = document.createElement("audio");
       audio.controls = true;
@@ -57,6 +66,33 @@ function renderFiles(files) {
     }
 
     results.append(item);
+  }
+}
+
+async function loadAudioList() {
+  try {
+    const response = await fetch(`${API_BASE}/api/audio`);
+    const payload = await response.json();
+    if (response.ok) {
+      renderFiles(payload.files || []);
+    }
+  } catch {
+    // The generator can still work if the list request fails.
+  }
+}
+
+async function deleteAudio(file) {
+  if (!file.deleteUrl) return;
+  try {
+    const response = await fetch(`${API_BASE}${file.deleteUrl}`, { method: "DELETE" });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || "删除失败");
+    }
+    renderFiles(payload.files || []);
+  } catch (error) {
+    jobMessage.textContent = error.message;
+    jobMessage.classList.add("error");
   }
 }
 
@@ -133,6 +169,7 @@ form.addEventListener("submit", async (event) => {
         renderFiles(data.files);
       }
       if (data.status === "done") {
+        loadAudioList();
         resetRunState("再生成一次");
       } else if (data.status === "error") {
         resetRunState("重新生成");
@@ -153,3 +190,4 @@ form.addEventListener("submit", async (event) => {
 });
 
 updateSubmitState();
+loadAudioList();

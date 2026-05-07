@@ -39,15 +39,13 @@ os.environ["FFPROBE_BINARY"] = "/opt/homebrew/bin/ffprobe"
 FFMPEG = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
 FFPROBE = shutil.which("ffprobe") or "/opt/homebrew/bin/ffprobe"
 EDGE_TTS = shutil.which("edge-tts") or "/opt/homebrew/Caskroom/miniforge/base/bin/edge-tts"
+EDGE_TTS_TIMEOUT_SECONDS = int(os.environ.get("EDGE_TTS_TIMEOUT_SECONDS", "120"))
 
 DEFAULT_VOICE = "zh-CN-YunjianNeural"
 DEFAULT_RATE = "-5%"
-DEFAULT_MAX_CHARS = 5000
 DEFAULT_PAUSE_MS = 1000
 TEMP_AUDIO_PREFIX = "temp_audio_"
 MAX_OUTPUT_JOBS = 5
-PUNCTUATION_TO_NEWLINE = "。，？！；、——!?：:…【】"
-REMOVE_CHARS = "\"'""'' "
 
 VOICES = [
     "zh-CN-YunjianNeural",
@@ -155,52 +153,8 @@ def replace_titles_in_docx(filename: Path) -> Path:
     return new_name
 
 
-def split_into_blocks(paragraphs: list[str], max_chars: int) -> list[list[str]]:
-    blocks: list[list[str]] = []
-    current: list[str] = []
-    current_len = 0
-    for para in paragraphs:
-        if current and current_len + len(para) > max_chars:
-            blocks.append(current)
-            current = [para]
-            current_len = len(para)
-        else:
-            current.append(para)
-            current_len += len(para)
-    if current:
-        blocks.append(current)
-    return blocks
-
-
 def process_for_tts(text: str) -> str:
     return re.sub(r"\[\[(.*?)\|(.*?)\]\]", r"\2", text)
-
-
-def process_for_subtitle(text: str) -> str:
-    text = re.sub(r"\[\[(.*?)\|(.*?)\]\]", r"\1", text)
-    title_map = {}
-
-    def save_title(match):
-        key = f"<TITLE_{len(title_map)}>"
-        title_map[key] = match.group(0)
-        return key
-
-    text = re.sub(r"《.*?》", save_title, text)
-    for punct in PUNCTUATION_TO_NEWLINE:
-        text = text.replace(punct, "\n")
-    text = re.sub(f"[{re.escape(REMOVE_CHARS)}]", "", text)
-    for key, value in title_map.items():
-        text = text.replace(key, value)
-    return text.strip()
-
-
-def save_subtitle(text: str, index: int, out_dir: Path) -> Path:
-    path = out_dir / f"cc_{index + 1}.docx"
-    doc = Document()
-    for line in text.split("\n"):
-        doc.add_paragraph(line)
-    doc.save(str(path))
-    return path
 
 
 def normalize_dropbox_url(url: str) -> str:
@@ -356,10 +310,11 @@ def make_silence_file(path: Path, pause_ms: int):
     subprocess.run(cmd, check=True)
 
 
-def concat_audio_files(parts: list[Path], target: Path):
+def concat_audio_files(parts: list[Path], target: Path, temp_dir: Path):
     if not parts:
         raise RuntimeError("没有成功生成任何音频")
-    concat_path = target.parent / f"{target.stem}_concat.txt"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    concat_path = temp_dir / f"{target.stem}_concat.txt"
     concat_path.write_text("".join(ffconcat_line(part) for part in parts), encoding="utf-8")
     try:
         cmd = [
@@ -397,9 +352,28 @@ def concat_audio_files(parts: list[Path], target: Path):
         concat_path.unlink(missing_ok=True)
 
 
+def run_edge_tts(cmd: list[str], target: Path) -> bool:
+    try:
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=EDGE_TTS_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        target.unlink(missing_ok=True)
+        return False
+    if result.returncode != 0:
+        target.unlink(missing_ok=True)
+        return False
+    return target.exists() and target.stat().st_size > 0
+
+
 def synthesize_block(
     block: list[str],
     target: Path,
+    temp_dir: Path,
     job: Job,
     voice: str,
     rate: str,
@@ -408,20 +382,22 @@ def synthesize_block(
     done_ref: list[int],
     block_label: str,
 ):
+    temp_dir.mkdir(parents=True, exist_ok=True)
     temp_files: list[Path] = []
     concat_parts: list[Path] = []
-    silence_file = target.parent / f"{target.stem}_silence.mp3"
+    silence_file = temp_dir / f"{target.stem}_silence.mp3"
     if pause_ms > 0:
         make_silence_file(silence_file, pause_ms)
         temp_files.append(silence_file)
 
     for index, para in enumerate(block):
         job.check_cancelled()
-        temp_mp3 = target.parent / f"{TEMP_AUDIO_PREFIX}{target.stem}_{index}.mp3"
+        temp_mp3 = temp_dir / f"{TEMP_AUDIO_PREFIX}{target.stem}_{index}.mp3"
         tts_text = process_for_tts(para)
         ok = False
 
-        for attempt in range(3):
+        max_attempts = 3
+        for attempt in range(max_attempts):
             job.check_cancelled()
             job.emit(
                 status="running",
@@ -437,10 +413,11 @@ def synthesize_block(
                 "--write-media",
                 str(temp_mp3),
             ]
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-            if temp_mp3.exists() and temp_mp3.stat().st_size > 0:
+            if run_edge_tts(cmd, temp_mp3):
                 ok = True
                 break
+            if attempt < max_attempts - 1:
+                job.emit(message=f"{block_label}：第 {index + 1} 段超时，正在重试 {attempt + 2}/{max_attempts}")
             time.sleep(1 + attempt)
             job.check_cancelled()
 
@@ -461,7 +438,7 @@ def synthesize_block(
         job.check_cancelled()
         merge_progress = min(98, max(96, int(done_ref[0] / max(1, total_paras) * 98)))
         job.emit(progress=merge_progress, message=f"{block_label}：正在合并音频")
-        concat_audio_files(concat_parts, target)
+        concat_audio_files(concat_parts, target, temp_dir)
     finally:
         for item in temp_files:
             item.unlink(missing_ok=True)
@@ -479,7 +456,6 @@ def run_job(job: Job, payload: dict):
         mode = payload["mode"]
         voice = payload["voice"] if payload["voice"] in VOICES else DEFAULT_VOICE
         rate = payload["rate"] or DEFAULT_RATE
-        max_chars = payload["max_chars"]
         pause_ms = payload["pause_ms"]
 
         job.emit(status="running", progress=2, message="正在读取内容")
@@ -497,7 +473,7 @@ def run_job(job: Job, payload: dict):
             paragraphs = read_docx(docx_path)
             if not paragraphs:
                 raise RuntimeError("文档里没有可朗读的内容")
-            blocks = split_into_blocks(paragraphs, max_chars)
+            blocks = [paragraphs]
             title = safe_name(payload.get("title") or suggested_title(paragraphs))
             job.title = title
         else:
@@ -522,14 +498,10 @@ def run_job(job: Job, payload: dict):
             else:
                 filename = f"{title}-{block_index + 1}.mp3"
             mp3_path = out_dir / filename
+            block_temp_dir = work_dir / f"audio_{block_index + 1}"
             label = f"音频 {block_index + 1}/{len(blocks)}"
-            synthesize_block(block, mp3_path, job, voice, rate, pause_ms, total_paras, done_ref, label)
+            synthesize_block(block, mp3_path, block_temp_dir, job, voice, rate, pause_ms, total_paras, done_ref, label)
             files.append({"name": mp3_path.name, "url": f"/outputs/{job.id}/{mp3_path.name}", "type": "audio"})
-
-            if mode in {"file", "url"}:
-                subtitle_text = process_for_subtitle("\n".join(block))
-                cc_path = save_subtitle(subtitle_text, block_index, out_dir)
-                files.append({"name": cc_path.name, "url": f"/outputs/{job.id}/{cc_path.name}", "type": "docx"})
 
         job.emit(status="done", progress=100, message="完成", files=files)
     except Exception as exc:
@@ -640,7 +612,10 @@ class LangduHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         if not head_only:
-            self.wfile.write(data)
+            try:
+                self.wfile.write(data)
+            except (BrokenPipeError, ConnectionResetError):
+                return
 
     def serve_events(self, path: str):
         job_id = path.split("/")[3]
@@ -696,7 +671,6 @@ class LangduHandler(BaseHTTPRequestHandler):
         title = safe_name(raw_title, fallback="") if raw_title else ""
         voice = form.getfirst("voice", DEFAULT_VOICE)
         rate = form.getfirst("rate", DEFAULT_RATE)
-        max_chars = as_int(form.getfirst("max_chars"), DEFAULT_MAX_CHARS, 500, 1000000)
         pause_ms = as_int(form.getfirst("pause_ms"), DEFAULT_PAUSE_MS, 0, 5000)
 
         payload = {
@@ -704,7 +678,6 @@ class LangduHandler(BaseHTTPRequestHandler):
             "title": title,
             "voice": voice,
             "rate": rate,
-            "max_chars": max_chars,
             "pause_ms": pause_ms,
         }
 
@@ -760,11 +733,14 @@ class LangduHandler(BaseHTTPRequestHandler):
 
     def json_response(self, payload: dict, status=HTTPStatus.OK):
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError):
+            return
 
 
 def main():

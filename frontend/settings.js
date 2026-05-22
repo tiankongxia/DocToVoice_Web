@@ -2,7 +2,6 @@ const defaults = {
   voice: "zh-CN-YunjianNeural",
   rate: "-5%",
   pause_ms: "1000",
-  split_mode: "none",
 };
 
 const form = document.querySelector("#settingsForm");

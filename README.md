@@ -5,7 +5,7 @@
 ## 架构
 
 - `frontend/`: 静态网页，部署到 Netlify。
-- `backend/`: Python 服务，部署到 Render/Railway/Fly.io 等支持 Docker 的平台。
+- `backend/`: Python 服务，部署到 Render。
 
 Netlify 只负责网页和代理请求；音频生成由后端完成，因为它需要 `edge-tts`、`ffmpeg` 和 `python-docx`。
 
@@ -13,26 +13,23 @@ Netlify 只负责网页和代理请求；音频生成由后端完成，因为它
 
 - 首页只保留 Dropbox 链接、粘贴按钮、开始/取消生成和结果。
 - 首页会列出服务器最近保留的 MP3，可播放、下载、删除。
-- 声音、语速、段落停顿、分块模式放在 `frontend/settings.html`。
-- 分块默认是不分块；开启自动分块后按约 5000 字一块输出。
+- 声音、语速、段落停顿放在 `frontend/settings.html`。
 
 ## 1. 部署后端到 Render
 
 1. 打开 Render，选择 New > Web Service。
 2. 连接这个 GitHub 仓库。
-3. 如果 Railway 能看到 Root Directory，填：
+3. Root Directory 填：
 
 ```text
 backend
 ```
 
-如果看不到也没关系，仓库根目录已经有 `Dockerfile` 和 `railway.json`，直接部署即可。
-
-4. Environment 选择 Docker，或保持 Railway 自动识别。
+4. Environment 选择 Docker。
 5. 部署完成后，记下后端地址，例如：
 
 ```text
-https://doctovoiceweb-production.up.railway.app
+https://doctovoice-web.onrender.com
 ```
 
 ## 2. 配置 Netlify 前端
@@ -46,7 +43,7 @@ frontend/netlify.toml
 把里面两个：
 
 ```text
-https://doctovoiceweb-production.up.railway.app
+https://doctovoice-web.onrender.com
 ```
 
 替换成你的 Render 后端地址。
@@ -76,16 +73,10 @@ frontend
 frontend/config.js
 ```
 
-当前保留 Railway 和 Render 两个后端，切换只需要改 `ACTIVE_BACKEND`：
+当前前端直接使用 Render 后端：
 
 ```js
-window.BACKENDS = {
-  railway: "https://doctovoiceweb-production.up.railway.app",
-  render: "https://doctovoice-web.onrender.com",
-};
-
-window.ACTIVE_BACKEND = "render";
-window.API_BASE_URL = window.BACKENDS[window.ACTIVE_BACKEND];
+window.API_BASE_URL = "https://doctovoice-web.onrender.com";
 ```
 
 ## 本地运行

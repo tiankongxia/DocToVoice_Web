@@ -3,12 +3,12 @@
 
 [[redirects]]
   from = "/api/*"
-  to = "https://doctovoiceweb-production.up.railway.app/api/:splat"
+  to = "https://doctovoice-web.onrender.com/api/:splat"
   status = 200
   force = true
 
 [[redirects]]
   from = "/outputs/*"
-  to = "https://doctovoiceweb-production.up.railway.app/outputs/:splat"
+  to = "https://doctovoice-web.onrender.com/outputs/:splat"
   status = 200
   force = true

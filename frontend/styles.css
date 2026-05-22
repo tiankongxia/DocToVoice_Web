@@ -380,11 +380,24 @@ textarea:focus {
   background: var(--bg);
 }
 
+.file-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .file-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.file-time-code {
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
 }
 
 .file-actions {

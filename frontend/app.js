@@ -14,6 +14,7 @@ const deleteCancel = document.querySelector("#deleteCancel");
 const deleteConfirm = document.querySelector("#deleteConfirm");
 const deleteFileName = document.querySelector("#deleteFileName");
 const API_BASE = window.API_BASE_URL || "";
+const EASTERN_TIME_ZONE = "America/New_York";
 let activeJobId = null;
 let activeSource = null;
 let pendingDeleteFile = null;
@@ -22,7 +23,6 @@ const defaults = {
   voice: "zh-CN-YunjianNeural",
   rate: "-5%",
   pause_ms: "1000",
-  split_mode: "none",
 };
 
 function getSettings() {
@@ -35,7 +35,6 @@ function applySettingsToForm() {
   form.elements.voice.value = settings.voice;
   form.elements.rate.value = settings.rate;
   form.elements.pause_ms.value = settings.pause_ms;
-  form.elements.max_chars.value = settings.split_mode === "auto" ? "5000" : "1000000";
 }
 
 function setButtonProgress(value) {
@@ -53,11 +52,23 @@ function renderFiles(files) {
     const item = document.createElement("div");
     item.className = "result-item";
 
+    const main = document.createElement("div");
+    main.className = "file-main";
+
     const name = document.createElement("strong");
     name.className = "file-name";
     name.textContent = file.name;
     name.title = file.name;
-    item.append(name);
+    main.append(name);
+
+    if (Number.isFinite(file.modifiedAt)) {
+      const timeCode = document.createElement("span");
+      timeCode.className = "file-time-code";
+      timeCode.textContent = formatDate(file.modifiedAt);
+      main.append(timeCode);
+    }
+
+    item.append(main);
 
     const actions = document.createElement("div");
     actions.className = "file-actions";
@@ -214,7 +225,18 @@ function formatFileSize(bytes) {
 
 function formatDate(seconds) {
   if (!Number.isFinite(seconds)) return "未知";
-  return new Date(seconds * 1000).toLocaleString("zh-CN", { hour12: false });
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: EASTERN_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(seconds * 1000));
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day} ${values.hour}:${values.minute}:${values.second} 美东`;
 }
 
 function formatDuration(seconds) {

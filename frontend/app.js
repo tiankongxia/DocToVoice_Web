@@ -3,6 +3,7 @@ const primary = document.querySelector("#submitButton");
 const cancelButton = document.querySelector("#cancelButton");
 const urlInput = document.querySelector("#url");
 const clearUrlButton = document.querySelector("#clearUrlButton");
+const urlHint = document.querySelector("#urlHint");
 const jobMessage = document.querySelector("#jobMessage");
 const results = document.querySelector("#results");
 const infoModal = document.querySelector("#infoModal");
@@ -15,10 +16,14 @@ const deleteConfirm = document.querySelector("#deleteConfirm");
 const deleteFileName = document.querySelector("#deleteFileName");
 const API_BASE = window.API_BASE_URL || "";
 const EASTERN_TIME_ZONE = "America/New_York";
+const AUDIO_LIST_LOADING_TEXT = "正在加载已保存的语音…";
+const ACTIVE_JOB_STORAGE_KEY = "docToVoiceActiveJobId";
+const BACKGROUND_JOB_HINT = "关闭网页后也会在后台继续，稍后回来可查看进度。";
 let activeJobId = null;
 let activeSource = null;
 let pendingDeleteFile = null;
 let currentAudio = null;
+let highlightedAudioKeys = new Set();
 const defaults = {
   voice: "zh-CN-YunjianNeural",
   rate: "-5%",
@@ -42,15 +47,74 @@ function setButtonProgress(value) {
   primary.innerHTML = `<span class="spinner" aria-hidden="true"></span><span>生成中 ${Math.round(safe)}%</span>`;
 }
 
+function saveActiveJob(jobId) {
+  localStorage.setItem(ACTIVE_JOB_STORAGE_KEY, jobId);
+}
+
+function clearSavedActiveJob() {
+  localStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
+}
+
+function isDropboxUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.hostname === "dropbox.com" || url.hostname.endsWith(".dropbox.com");
+  } catch {
+    return false;
+  }
+}
+
+function setUrlHint(message = "", isError = false) {
+  urlHint.textContent = message;
+  urlHint.classList.toggle("hidden", !message);
+  urlHint.classList.toggle("error", isError);
+}
+
+function validateUrlField({ showError = false } = {}) {
+  const value = urlInput.value.trim();
+  if (!value || isDropboxUrl(value)) {
+    setUrlHint();
+    return true;
+  }
+  if (showError) {
+    setUrlHint("请粘贴 Dropbox 的 .docx 分享链接。", true);
+  }
+  return false;
+}
+
+function appendBackgroundHint(message) {
+  const base = (message || "正在转换").trim();
+  const punctuation = /[。！？…]$/.test(base) ? "" : "。";
+  return `${base}${punctuation}${BACKGROUND_JOB_HINT}`;
+}
+
+function renderListNotice(message, tone = "") {
+  results.innerHTML = "";
+  const notice = document.createElement("div");
+  notice.className = `results-notice${tone ? ` ${tone}` : ""}`;
+  notice.textContent = message;
+  results.append(notice);
+}
+
 function renderFiles(files) {
   if (currentAudio) {
     currentAudio.pause();
     currentAudio = null;
   }
   results.innerHTML = "";
-  for (const file of (files || []).filter((item) => item.type === "audio")) {
+  const audioFiles = (files || []).filter((item) => item.type === "audio");
+  if (!audioFiles.length) {
+    renderListNotice("还没有已保存的语音。粘贴 Dropbox 文档链接后，生成的音频会出现在这里。");
+    return;
+  }
+  for (const file of audioFiles) {
     const item = document.createElement("div");
     item.className = "result-item";
+    const audioKey = file.jobId ? `${file.jobId}/${file.name}` : "";
+    if (audioKey && highlightedAudioKeys.has(audioKey)) {
+      item.classList.add("is-new");
+      setTimeout(() => item.classList.remove("is-new"), 4500);
+    }
 
     const main = document.createElement("div");
     main.className = "file-main";
@@ -325,15 +389,22 @@ async function downloadOrShareAudio(file) {
   }
 }
 
-async function loadAudioList() {
+async function loadAudioList({ showLoading = true } = {}) {
+  if (showLoading) {
+    renderListNotice(AUDIO_LIST_LOADING_TEXT, "loading");
+  }
   try {
     const response = await fetch(`${API_BASE}/api/audio`);
     const payload = await response.json();
     if (response.ok) {
       renderFiles(payload.files || []);
+      return;
     }
+    throw new Error(payload.error || "加载失败");
   } catch {
-    // The generator can still work if the list request fails.
+    if (showLoading) {
+      renderListNotice("暂时无法加载已保存的语音", "error");
+    }
   }
 }
 
@@ -361,6 +432,8 @@ async function confirmDeleteAudio() {
     }
     hideDeleteConfirm();
     renderFiles(payload.files || []);
+    jobMessage.textContent = "已删除音频。";
+    jobMessage.classList.remove("error");
   } catch (error) {
     jobMessage.textContent = error.message;
     jobMessage.classList.add("error");
@@ -375,8 +448,18 @@ function updateSubmitState() {
   clearUrlButton.classList.toggle("hidden", !hasUrl);
 }
 
-function resetRunState(label = "开始生成") {
+function setRunState(jobId, progress = 0) {
+  activeJobId = jobId;
+  setButtonProgress(progress);
+  primary.disabled = true;
+  cancelButton.classList.remove("hidden");
+}
+
+function resetRunState(label = "开始生成", { clearSavedJob = true } = {}) {
   activeJobId = null;
+  if (clearSavedJob) {
+    clearSavedActiveJob();
+  }
   if (activeSource) {
     activeSource.close();
     activeSource = null;
@@ -386,10 +469,81 @@ function resetRunState(label = "开始生成") {
   updateSubmitState();
 }
 
-urlInput.addEventListener("input", updateSubmitState);
+function handleJobEvent(data) {
+  const isActive = data.status === "queued" || data.status === "running";
+  jobMessage.textContent = data.error || (isActive ? appendBackgroundHint(data.message) : data.message) || "";
+  jobMessage.classList.toggle("error", data.status === "error");
+  setButtonProgress(data.progress);
+  if (data.files?.length) {
+    renderFiles(data.files);
+  }
+  if (data.status === "done") {
+    const completedJobId = activeJobId || data.id;
+    highlightedAudioKeys = new Set((data.files || []).map((file) => `${completedJobId}/${file.name}`));
+    jobMessage.textContent = "已生成，音频已保存到下方列表。";
+    loadAudioList({ showLoading: false });
+    resetRunState();
+  } else if (data.status === "error") {
+    resetRunState("重新生成");
+  } else if (data.status === "cancelled") {
+    jobMessage.textContent = "已取消";
+    resetRunState();
+  }
+}
+
+function connectJobEvents(jobId) {
+  if (activeSource) {
+    activeSource.close();
+  }
+  const source = new EventSource(`${API_BASE}/api/jobs/${jobId}/events`);
+  activeSource = source;
+  source.onmessage = (message) => {
+    handleJobEvent(JSON.parse(message.data));
+  };
+  source.onerror = () => {
+    jobMessage.textContent = "连接中断，正在尝试恢复进度。后台转换仍可能继续进行。";
+    jobMessage.classList.add("error");
+  };
+}
+
+async function restoreActiveJob() {
+  const jobId = localStorage.getItem(ACTIVE_JOB_STORAGE_KEY);
+  if (!jobId) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/jobs/${jobId}`);
+    if (!response.ok) {
+      clearSavedActiveJob();
+      return;
+    }
+    const job = await response.json();
+    if (job.status === "queued" || job.status === "running") {
+      setRunState(job.id, job.progress);
+      jobMessage.classList.remove("error");
+      jobMessage.textContent = appendBackgroundHint(job.message || "正在恢复转换进度");
+      connectJobEvents(job.id);
+      return;
+    }
+    handleJobEvent(job);
+  } catch {
+    jobMessage.textContent = "暂时无法恢复转换进度。";
+    jobMessage.classList.add("error");
+  }
+}
+
+urlInput.addEventListener("input", () => {
+  updateSubmitState();
+  if (!urlHint.classList.contains("hidden")) {
+    validateUrlField({ showError: true });
+  }
+});
+
+urlInput.addEventListener("blur", () => {
+  validateUrlField({ showError: true });
+});
 
 clearUrlButton.addEventListener("click", () => {
   urlInput.value = "";
+  setUrlHint();
   updateSubmitState();
   urlInput.focus();
 });
@@ -435,9 +589,14 @@ document.addEventListener("keydown", (event) => {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!urlInput.value.trim() || activeJobId) return;
+  if (!validateUrlField({ showError: true })) {
+    urlInput.focus();
+    return;
+  }
   applySettingsToForm();
   setButtonProgress(0);
-  jobMessage.textContent = "";
+  jobMessage.textContent = appendBackgroundHint("正在转换");
+  jobMessage.classList.remove("error");
   primary.disabled = true;
   cancelButton.classList.remove("hidden");
 
@@ -451,31 +610,9 @@ form.addEventListener("submit", async (event) => {
       throw new Error(payload.error || "任务创建失败");
     }
 
-    activeJobId = payload.id;
-    const source = new EventSource(`${API_BASE}/api/jobs/${payload.id}/events`);
-    activeSource = source;
-    source.onmessage = (message) => {
-      const data = JSON.parse(message.data);
-      jobMessage.textContent = data.error || data.message || "";
-      jobMessage.classList.toggle("error", data.status === "error");
-      setButtonProgress(data.progress);
-      if (data.files?.length) {
-        renderFiles(data.files);
-      }
-      if (data.status === "done") {
-        loadAudioList();
-        resetRunState();
-      } else if (data.status === "error") {
-        resetRunState("重新生成");
-      } else if (data.status === "cancelled") {
-        jobMessage.textContent = "已取消";
-        resetRunState();
-      }
-    };
-    source.onerror = () => {
-      jobMessage.textContent = "连接中断，可以刷新后重新查看。";
-      resetRunState("重新生成");
-    };
+    saveActiveJob(payload.id);
+    setRunState(payload.id, 0);
+    connectJobEvents(payload.id);
   } catch (error) {
     jobMessage.textContent = error.message;
     jobMessage.classList.add("error");
@@ -485,3 +622,4 @@ form.addEventListener("submit", async (event) => {
 
 updateSubmitState();
 loadAudioList();
+restoreActiveJob();

@@ -194,6 +194,17 @@ p {
   margin-bottom: 14px;
 }
 
+.field-hint {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.field-hint.error {
+  color: var(--danger);
+}
+
 .input-row {
   display: block;
 }
@@ -359,9 +370,39 @@ textarea:focus {
   display: none;
 }
 
+.results-head {
+  margin-top: 4px;
+}
+
+.results-head h2 {
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.25;
+}
+
 .results {
   display: grid;
   gap: 12px;
+}
+
+.results-notice {
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 52%, transparent);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.results-notice.loading {
+  color: var(--accent-strong);
+}
+
+.results-notice.error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
 }
 
 .message {
@@ -378,6 +419,12 @@ textarea:focus {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--bg);
+}
+
+.result-item.is-new {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .file-main {

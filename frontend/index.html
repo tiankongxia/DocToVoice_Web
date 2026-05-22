@@ -29,9 +29,10 @@
               <label for="url">Dropbox 文档链接</label>
               <div class="input-row">
                 <div class="url-input-wrap">
-                  <input id="url" name="url" type="url" placeholder="https://www.dropbox.com/..." autocomplete="off" />
+                  <input id="url" name="url" type="url" placeholder="https://www.dropbox.com/..." autocomplete="off" aria-describedby="urlHint" />
                   <button class="input-clear hidden" id="clearUrlButton" type="button" aria-label="清空链接" title="清空"></button>
                 </div>
+                <p class="field-hint hidden" id="urlHint"></p>
               </div>
             </div>
 
@@ -41,6 +42,9 @@
         </section>
 
         <p class="message" id="jobMessage"></p>
+        <div class="results-head">
+          <h2>已保存的语音</h2>
+        </div>
         <section class="results" id="results"></section>
       </section>
     </main>

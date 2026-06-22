@@ -350,6 +350,24 @@ function isMobileDevice() {
     /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
+function isSharePermissionError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return error?.name === "NotAllowedError" ||
+    message.includes("not allowed by the user agent") ||
+    message.includes("denied permission");
+}
+
+function triggerBlobDownload(blob, filename) {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
 async function downloadOrShareAudio(file) {
   const url = fileUrl(file);
   jobMessage.classList.remove("error");
@@ -361,22 +379,21 @@ async function downloadOrShareAudio(file) {
     const audioFile = new File([blob], file.name, { type: "audio/mpeg" });
 
     if (isMobileDevice() && navigator.canShare?.({ files: [audioFile] })) {
-      await navigator.share({
-        files: [audioFile],
-        title: file.name,
-      });
-      jobMessage.textContent = "";
-      return;
+      try {
+        await navigator.share({
+          files: [audioFile],
+          title: file.name,
+        });
+        jobMessage.textContent = "";
+        return;
+      } catch (error) {
+        if (!isSharePermissionError(error)) {
+          throw error;
+        }
+      }
     }
 
-    const objectUrl = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = objectUrl;
-    link.download = file.name;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    triggerBlobDownload(blob, file.name);
     jobMessage.textContent = "";
   } catch (error) {
     if (error?.name === "AbortError" || /abort/i.test(error?.message || "")) {

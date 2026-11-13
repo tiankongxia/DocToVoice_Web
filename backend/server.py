@@ -352,22 +352,27 @@ def concat_audio_files(parts: list[Path], target: Path, temp_dir: Path):
         concat_path.unlink(missing_ok=True)
 
 
-def run_edge_tts(cmd: list[str], target: Path) -> bool:
+def run_edge_tts(cmd: list[str], target: Path) -> tuple[bool, str]:
     try:
         result = subprocess.run(
             cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
             timeout=EDGE_TTS_TIMEOUT_SECONDS,
             check=False,
         )
     except subprocess.TimeoutExpired:
         target.unlink(missing_ok=True)
-        return False
+        return False, "语音服务超时"
+    except OSError as exc:
+        return False, f"无法运行 edge-tts：{exc}"
     if result.returncode != 0:
         target.unlink(missing_ok=True)
-        return False
-    return target.exists() and target.stat().st_size > 0
+        lines = (result.stderr or result.stdout or "").strip().splitlines()
+        detail = lines[-1] if lines else f"退出码 {result.returncode}"
+        print(f"[edge-tts] failed: {detail}", flush=True)
+        return False, detail[-300:]
+    return (target.exists() and target.stat().st_size > 0), "未生成音频文件"
 
 
 def synthesize_block(
@@ -381,6 +386,7 @@ def synthesize_block(
     total_paras: int,
     done_ref: list[int],
     block_label: str,
+    last_failure: list[str] | None = None,
 ):
     temp_dir.mkdir(parents=True, exist_ok=True)
     temp_files: list[Path] = []
@@ -395,6 +401,7 @@ def synthesize_block(
         temp_mp3 = temp_dir / f"{TEMP_AUDIO_PREFIX}{target.stem}_{index}.mp3"
         tts_text = process_for_tts(para)
         ok = False
+        last_error = ""
 
         max_attempts = 3
         for attempt in range(max_attempts):
@@ -413,11 +420,11 @@ def synthesize_block(
                 "--write-media",
                 str(temp_mp3),
             ]
-            if run_edge_tts(cmd, temp_mp3):
-                ok = True
+            ok, last_error = run_edge_tts(cmd, temp_mp3)
+            if ok:
                 break
             if attempt < max_attempts - 1:
-                job.emit(message=f"{block_label}：第 {index + 1} 段超时，正在重试 {attempt + 2}/{max_attempts}")
+                job.emit(message=f"{block_label}：第 {index + 1} 段失败，正在重试 {attempt + 2}/{max_attempts}")
             time.sleep(1 + attempt)
             job.check_cancelled()
 
@@ -427,6 +434,8 @@ def synthesize_block(
 
         if not ok:
             job.emit(message=f"{block_label}：第 {index + 1} 段失败，已跳过")
+            if last_failure is not None:
+                last_failure[0] = last_error
             continue
 
         temp_files.append(temp_mp3)
@@ -438,6 +447,8 @@ def synthesize_block(
         job.check_cancelled()
         merge_progress = min(98, max(96, int(done_ref[0] / max(1, total_paras) * 98)))
         job.emit(progress=merge_progress, message=f"{block_label}：正在合并音频")
+        if not concat_parts:
+            raise RuntimeError(f"所有段落都合成失败：{(last_failure or [''])[0] or '未知原因'}")
         concat_audio_files(concat_parts, target, temp_dir)
     finally:
         for item in temp_files:
@@ -486,6 +497,7 @@ def run_job(job: Job, payload: dict):
         total_paras = sum(len(block) for block in blocks)
         done_ref = [0]
         files: list[dict[str, str]] = []
+        last_failure = [""]
 
         job.emit(progress=5, message=f"共 {len(blocks)} 个音频文件，{total_paras} 段")
 
@@ -500,7 +512,7 @@ def run_job(job: Job, payload: dict):
             mp3_path = out_dir / filename
             block_temp_dir = work_dir / f"audio_{block_index + 1}"
             label = f"音频 {block_index + 1}/{len(blocks)}"
-            synthesize_block(block, mp3_path, block_temp_dir, job, voice, rate, pause_ms, total_paras, done_ref, label)
+            synthesize_block(block, mp3_path, block_temp_dir, job, voice, rate, pause_ms, total_paras, done_ref, label, last_failure)
             files.append({"name": mp3_path.name, "url": f"/outputs/{job.id}/{mp3_path.name}", "type": "audio"})
 
         job.emit(status="done", progress=100, message="完成", files=files)

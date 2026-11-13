@@ -2,6 +2,11 @@
 
 把 Dropbox 文档链接转成中文朗读 MP3。
 
+## 线上地址
+
+- 前端（Netlify）：https://docstovoiceweb.netlify.app/
+- 后端（Render）：https://doctovoice-web.onrender.com
+
 ## 架构
 
 - `frontend/`: 静态网页，部署到 Netlify。
